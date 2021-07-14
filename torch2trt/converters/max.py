@@ -20,8 +20,10 @@ def __convert_max_reduce(ctx):
     input_trt = add_missing_trt_tensors(ctx.network, [input])[0]
     output_val = ctx.method_return[0]
     output_idx = ctx.method_return[1]
-    layer = ctx.network.add_reduce(input_trt,  trt.ReduceOperation.MAX, torch_dim_to_trt_axes(dim), keepdim)
-    output_val._trt = layer.get_output(0)
+    layer_val = ctx.network.add_reduce(input_trt,  trt.ReduceOperation.MAX, torch_dim_to_trt_axes(dim), keepdim)
+    layer_idx = ctx.network.add_topk(input_trt,  trt.TopKOperation.MAX, 1, torch_dim_to_trt_axes(dim))
+    output_val._trt = layer_val.get_output(0)
+    output_idx._trt = layer_idx.get_output(1)
     
 
 @tensorrt_converter('torch.max')
