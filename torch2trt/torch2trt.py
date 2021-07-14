@@ -415,12 +415,18 @@ class ConversionContext(object):
         if names is None:
             names = default_output_names(len(torch_outputs))
         self.output_names = names
+        # print("[*DEBUG*]","network output: ", len(torch_outputs))
         for i, torch_output in enumerate(torch_outputs):
-            trt_tensor = torch_output._trt
-            trt_tensor.name = names[i]
-            trt_tensor.location = torch_device_to_trt(torch_output.device)
-            trt_tensor.dtype = torch_dtype_to_trt(torch_output.dtype)
-            self.network.mark_output(trt_tensor)
+            try:
+                trt_tensor = torch_output._trt
+                trt_tensor.name = names[i]
+                trt_tensor.location = torch_device_to_trt(torch_output.device)
+                trt_tensor.dtype = torch_dtype_to_trt(torch_output.dtype)
+                self.network.mark_output(trt_tensor)
+            except:
+                print("[Warning]","{} is missing in this engine".format(names[i]))
+                del self.output_names[i]
+                
 
 
 class TRTModule(torch.nn.Module):
