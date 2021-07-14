@@ -34,6 +34,8 @@ def torch_dtype_to_trt(dtype):
         return trt.float16
     elif dtype == torch.float32:
         return trt.float32
+    elif dtype == torch.int64:
+        return trt.int32
     else:
         raise TypeError("%s is not supported by tensorrt" % dtype)
 
@@ -413,7 +415,6 @@ class ConversionContext(object):
         if names is None:
             names = default_output_names(len(torch_outputs))
         self.output_names = names
-
         for i, torch_output in enumerate(torch_outputs):
             trt_tensor = torch_output._trt
             trt_tensor.name = names[i]
