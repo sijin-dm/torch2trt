@@ -556,26 +556,48 @@ def torch2trt(module,
             if not isinstance(outputs, tuple) and not isinstance(outputs, list):
                 outputs = (outputs,)
             ctx.mark_outputs(outputs, output_names)
+    if trt_version() >= '8.0' :
+        config = builder.create_builder_config()
+        config.max_workspace_size = max_workspace_size
+        config.flags = fp16_mode << int(trt.BuilderFlag.FP16) | strict_type_constraints << int(trt.BuilderFlag.STRICT_TYPES)
+        builder.max_batch_size = max_batch_size
 
-    builder.max_workspace_size = max_workspace_size
-    builder.fp16_mode = fp16_mode
-    builder.max_batch_size = max_batch_size
-    builder.strict_type_constraints = strict_type_constraints
+        if int8_mode:
 
-    if int8_mode:
+            # default to use input tensors for calibration
+            if int8_calib_dataset is None:
+                int8_calib_dataset = TensorBatchDataset(inputs_in)
 
-        # default to use input tensors for calibration
-        if int8_calib_dataset is None:
-            int8_calib_dataset = TensorBatchDataset(inputs_in)
+            config.flags = config.flags | int8_mode << int(trt.BuilderFlag.INT8)
 
-        builder.int8_mode = True
+            #Making sure not to run calibration with QAT mode on 
+            if not 'qat_mode' in kwargs:
+                # @TODO(jwelsh):  Should we set batch_size=max_batch_size?  Need to investigate memory consumption
+                config.int8_calibrator = DatasetCalibrator(
+                    inputs, int8_calib_dataset, batch_size=int8_calib_batch_size, algorithm=int8_calib_algorithm
+                )
 
-        # @TODO(jwelsh):  Should we set batch_size=max_batch_size?  Need to investigate memory consumption
-        builder.int8_calibrator = DatasetCalibrator(
-            inputs, int8_calib_dataset, batch_size=int8_calib_batch_size, algorithm=int8_calib_algorithm
-        )
-
-    engine = builder.build_cuda_engine(network)
+        engine = builder.build_engine(network, config)
+    else:
+        builder.max_workspace_size = max_workspace_size
+        builder.fp16_mode = fp16_mode
+        builder.max_batch_size = max_batch_size
+        builder.strict_type_constraints = strict_type_constraints
+    
+        if int8_mode:
+        
+            # default to use input tensors for calibration
+            if int8_calib_dataset is None:
+                int8_calib_dataset = TensorBatchDataset(inputs_in)
+    
+            builder.int8_mode = True
+    
+            # @TODO(jwelsh):  Should we set batch_size=max_batch_size?  Need to investigate memory consumption
+            builder.int8_calibrator = DatasetCalibrator(
+                inputs, int8_calib_dataset, batch_size=int8_calib_batch_size, algorithm=int8_calib_algorithm
+            )
+    
+        engine = builder.build_cuda_engine(network)
 
     module_trt = TRTModule(engine, input_names, output_names)
 
